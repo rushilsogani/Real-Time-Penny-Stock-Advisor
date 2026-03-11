@@ -47,34 +47,6 @@ Indicator behavior is based on standard technical-analysis definitions. For refe
 - `stockmarkpred/runner.py`: continuous scan loop.
 - `tests/`: small unit tests for indicator math and signal behavior.
 
-## Setup
-
-1. Copy `.env.example` to `.env`.
-2. Add your Alpaca market-data API key and secret.
-3. Run the scanner with your Python 3.11 path:
-
-```powershell
-C:/Users/rushi/AppData/Local/Microsoft/WindowsApps/python3.11.exe main.py --once
-```
-
-To keep it running:
-
-```powershell
-C:/Users/rushi/AppData/Local/Microsoft/WindowsApps/python3.11.exe main.py
-```
-
-Useful overrides:
-
-```powershell
-C:/Users/rushi/AppData/Local/Microsoft/WindowsApps/python3.11.exe main.py --poll-seconds 20 --candidate-limit 18 --max-ideas 6
-```
-
-Add manual symbols on top of the live screener:
-
-```powershell
-C:/Users/rushi/AppData/Local/Microsoft/WindowsApps/python3.11.exe main.py --symbols AEMD SINT
-```
-
 ## Output
 
 Each cycle prints:
