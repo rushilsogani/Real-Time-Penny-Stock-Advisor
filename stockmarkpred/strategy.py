@@ -8,6 +8,9 @@ from stockmarkpred.indicators import atr, ema_series, macd, relative_volume, rsi
 from stockmarkpred.models import Bar, MarketSnapshot, TradeIdea
 
 EASTERN = ZoneInfo("America/New_York")
+BREAKOUT_ENTRY_BUFFER = 0.0015
+MAX_ENTRY_EXTENSION_PCT = 0.0125
+MAX_ENTRY_EXTENSION_ATR = 0.35
 
 
 class PennyMomentumStrategy:
@@ -27,6 +30,46 @@ class PennyMomentumStrategy:
         if session_bars:
             return session_bars
         return [bar for bar in bars if bar.time.astimezone(EASTERN).date() == latest_date]
+
+    def _plan_entry(
+        self,
+        current_price: float,
+        opening_range_high: float,
+        ema9: float,
+        ema20: float,
+        latest_vwap: float,
+        atr14: float,
+    ) -> tuple[float, bool, str]:
+        breakout_trigger = max(opening_range_high * (1.0 + BREAKOUT_ENTRY_BUFFER), ema9)
+        chase_buffer = min(breakout_trigger * MAX_ENTRY_EXTENSION_PCT, atr14 * MAX_ENTRY_EXTENSION_ATR)
+        actionable_ceiling = breakout_trigger + chase_buffer
+
+        pullback_candidates = sorted(
+            {
+                value
+                for value in [breakout_trigger, ema9, ema20, latest_vwap, opening_range_high]
+                if value > 0
+            },
+            reverse=True,
+        )
+        preferred_pullback = next(
+            (value for value in pullback_candidates if value <= current_price),
+            breakout_trigger,
+        )
+
+        if current_price < breakout_trigger:
+            return breakout_trigger, False, f"Trigger above {breakout_trigger:.4f} is still not broken"
+
+        if current_price <= actionable_ceiling:
+            extension_pct = ((current_price - breakout_trigger) / breakout_trigger) * 100.0 if breakout_trigger > 0 else 0.0
+            return breakout_trigger, True, f"Price is only {extension_pct:.2f}% above the breakout trigger"
+
+        extension_pct = ((current_price - preferred_pullback) / preferred_pullback) * 100.0 if preferred_pullback > 0 else 0.0
+        return (
+            preferred_pullback,
+            False,
+            f"Price is extended {extension_pct:.2f}% above the preferred pullback entry",
+        )
 
     def evaluate(self, snapshot: MarketSnapshot, bars: list[Bar]) -> TradeIdea | None:
         session_bars = self._latest_regular_session(bars)
@@ -196,24 +239,33 @@ class PennyMomentumStrategy:
         if score < self.settings.watch_threshold:
             return None
 
-        action = "BUY" if score >= self.settings.score_threshold and hard_long_filters else "WATCH"
+        entry_price, actionable_now, entry_reason = self._plan_entry(
+            current_price=current_price,
+            opening_range_high=opening_range_high,
+            ema9=ema9,
+            ema20=ema20,
+            latest_vwap=latest_vwap,
+            atr14=atr14,
+        )
+
+        action = "BUY" if score >= self.settings.score_threshold and hard_long_filters and actionable_now else "WATCH"
 
         support_candidates = [
             value
             for value in [latest_vwap, ema20, recent_swing_low, opening_range_high]
-            if value < current_price
+            if value < entry_price
         ]
         if not support_candidates:
             return None
         support = max(support_candidates)
 
         stop_buffer = atr14 * self.settings.atr_stop_multiplier
-        risk_per_share = current_price - (support - stop_buffer)
+        risk_per_share = entry_price - (support - stop_buffer)
         risk_per_share = max(risk_per_share, atr14 * self.settings.min_stop_atr)
         risk_per_share = min(risk_per_share, atr14 * self.settings.max_stop_atr)
 
-        stop_loss = max(0.01, current_price - risk_per_share)
-        take_profit = current_price + (risk_per_share * self.settings.risk_reward)
+        stop_loss = max(0.01, entry_price - risk_per_share)
+        take_profit = entry_price + (risk_per_share * self.settings.risk_reward)
 
         return TradeIdea(
             symbol=snapshot.symbol,
@@ -221,7 +273,7 @@ class PennyMomentumStrategy:
             score=score,
             confidence=score,
             current_price=round(current_price, 4),
-            entry_price=round(current_price, 4),
+            entry_price=round(entry_price, 4),
             stop_loss=round(stop_loss, 4),
             take_profit=round(take_profit, 4),
             gap_pct=round(gap_pct, 2),
@@ -237,5 +289,5 @@ class PennyMomentumStrategy:
             opening_range_low=round(opening_range_low, 4),
             generated_at=datetime.now(UTC),
             as_of=last_bar.time,
-            reasons=reasons[:6],
+            reasons=[entry_reason, *reasons[:5]],
         )

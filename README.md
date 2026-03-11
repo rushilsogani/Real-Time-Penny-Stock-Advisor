@@ -1,6 +1,6 @@
-# StockMarkPred
+# Penny Stock Advisor
 
-StockMarkPred is a live, rules-based penny-stock scanner for intraday momentum trading. It polls Alpaca market-data endpoints, ranks exchange-traded stocks priced under a configurable cap, and prints suggested long ideas with a stop loss, take profit, confidence score, and the exact indicators that drove each decision.
+Penny Stock Advisor is a live, rules-based penny-stock scanner for intraday momentum trading. It polls Alpaca market-data endpoints, ranks exchange-traded stocks priced under a configurable cap, and prints suggested long ideas with a stop loss, take profit, confidence score, and the exact indicators that drove each decision.
 
 This build does not pretend to guarantee profit. It is a transparent screening engine for research and paper trading. Penny stocks are highly volatile, spreads can widen fast, and live execution risk is material.
 
