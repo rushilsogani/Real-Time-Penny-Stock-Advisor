@@ -1,0 +1,1 @@
+"""StockMarkPred package."""
